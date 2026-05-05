@@ -136,6 +136,103 @@ func (c *Client) RejectIncident(ctx context.Context, id, reason string) error {
 	return nil
 }
 
+// ListFingerprints fetches the full fingerprint catalog. The agent
+// returns the catalog as a single object (total + categories + items
+// + pendingRefinements); we surface that shape directly so callers
+// can render the headline numbers without a second roundtrip.
+func (c *Client) ListFingerprints(ctx context.Context) (*FingerprintCatalog, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/fingerprints", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var out FingerprintCatalog
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return &out, nil
+}
+
+// GetFingerprint fetches one fingerprint by id (the slug, e.g.
+// "crash-loop-back-off"). 404 bubbles up as a clean HTTP-coded error
+// from c.do, which the CLI's `show` subcommand wraps with the lookup
+// id for the operator to copy-paste.
+func (c *Client) GetFingerprint(ctx context.Context, id string) (*Fingerprint, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/fingerprints/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var out Fingerprint
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return &out, nil
+}
+
+// StreamIncidents opens an SSE connection to the agent's
+// incident-stream and returns a channel of incident updates. The
+// agent emits individual incident snapshots on every state change;
+// callers reconcile the list themselves (a small map[ID]Incident
+// keyed off ev.ID is the standard shape).
+func (c *Client) StreamIncidents(ctx context.Context) (<-chan Incident, <-chan error) {
+	events := make(chan Incident, 32)
+	errs := make(chan error, 1)
+
+	go func() {
+		defer close(events)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/sse/incidents", nil)
+		if err != nil {
+			errs <- err
+			return
+		}
+		req.Header.Set("Accept", "text/event-stream")
+		if h := authHeader(); h != "" {
+			req.Header.Set("Authorization", h)
+		}
+		streamClient := &http.Client{Transport: c.http.Transport}
+		resp, err := streamClient.Do(req)
+		if err != nil {
+			errs <- err
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			errs <- fmt.Errorf("stream HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+			return
+		}
+		scanner := bufio.NewScanner(resp.Body)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		var dataBuf strings.Builder
+		for scanner.Scan() {
+			line := scanner.Text()
+			switch {
+			case line == "":
+				if dataBuf.Len() > 0 {
+					var inc Incident
+					if err := json.Unmarshal([]byte(dataBuf.String()), &inc); err == nil && inc.ID != "" {
+						select {
+						case events <- inc:
+						case <-ctx.Done():
+							return
+						}
+					}
+					dataBuf.Reset()
+				}
+			case strings.HasPrefix(line, "data:"):
+				dataBuf.WriteString(strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+			}
+		}
+		if err := scanner.Err(); err != nil && !errors.Is(err, context.Canceled) {
+			errs <- fmt.Errorf("read SSE: %w", err)
+			return
+		}
+		errs <- nil
+	}()
+	return events, errs
+}
+
 // StreamThoughts opens an SSE connection to the agent's thought-
 // stream for one incident and returns channels delivering parsed
 // events + a terminal error. The receiver should drain `events`

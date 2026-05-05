@@ -13,7 +13,7 @@ import (
 // REST client — server URL precedence: --server > $SREPULSE_URL >
 // config file > default localhost.
 var (
-	flagServer  string
+	flagServer   string
 	flagInsecure bool
 
 	versionInfo = struct{ version, commit, date string }{
@@ -70,7 +70,17 @@ func Execute() error {
 		&flagInsecure, "insecure-skip-tls-verify", false,
 		"skip TLS verification (dev only)",
 	)
-	rootCmd.AddCommand(versionCmd, listCmd, showCmd, approveCmd, rejectCmd, loginCmd, logsCmd, tuiCmd, configCmd)
+	// All incident-scoped subcommands live under `incidents` (with
+	// "i" / "inc" aliases for terseness). Fingerprint browse lives
+	// under `fingerprints` ("fp"). Top-level slots are reserved for
+	// noun-parents and the unique tools (tui / login / config /
+	// version).
+	rootCmd.AddCommand(versionCmd, incidentsCmd, fingerprintsCmd, loginCmd, tuiCmd, configCmd)
+	// Attach our `install` helper + richer help to Cobra's auto-built
+	// `completion` command. Must run AFTER all subcommands are
+	// registered so InitDefaultCompletionCmd has the full tree to
+	// generate scripts for.
+	extendCompletionCmd()
 	return rootCmd.Execute()
 }
 

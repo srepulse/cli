@@ -65,3 +65,40 @@ type TraceStep struct {
 	Message string         `json:"message,omitempty"`
 	Data    map[string]any `json:"data,omitempty"`
 }
+
+// ── Fingerprints ─────────────────────────────────────────────────
+//
+// The catalog of recognisers the agent matches incidents against.
+// Built-ins are code-shipped and read-only; learned ones are drafts
+// captured from approved LLM remediations and reviewable in the
+// catalog UI.
+
+type Fingerprint struct {
+	ID          string   `json:"id"`         // stable kebab-case slug
+	Name        string   `json:"name"`       // engine-side identifier (PascalCase)
+	Category    string   `json:"category"`   // crash / image / scheduling / observability / learned / …
+	Source      string   `json:"source"`     // k8s / prometheus / alertmanager / scanner / argocd / pagerduty
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Fix         string   `json:"fix"`
+	AutoPatch   bool     `json:"autoPatch"`
+	Confidence  string   `json:"confidence"` // calibration string, e.g. "0.92 (n=47)" or "0.55-0.75"
+	RiskLevel   string   `json:"riskLevel"`  // low / medium / high
+	Triggers    []string `json:"triggers,omitempty"`
+	Definition  string   `json:"definition"` // YAML body
+	Status      string   `json:"status,omitempty"`
+	Builtin     bool     `json:"builtin,omitempty"`
+	CreatedAt   string   `json:"createdAt,omitempty"`
+	UpdatedAt   string   `json:"updatedAt,omitempty"`
+}
+
+// FingerprintCatalog mirrors the top-level shape of GET /fingerprints:
+// total + per-category counts + the items array + a map of pending
+// refinement counts (fingerprint id → count of unreviewed plan
+// suggestions).
+type FingerprintCatalog struct {
+	Total              int            `json:"total"`
+	Categories         map[string]int `json:"categories"`
+	Items              []Fingerprint  `json:"items"`
+	PendingRefinements map[string]int `json:"pendingRefinements,omitempty"`
+}

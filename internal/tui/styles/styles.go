@@ -104,21 +104,33 @@ var (
 	HeaderHint = lipgloss.NewStyle().Foreground(Fg3)
 )
 
-// SeverityStyle picks a Lipgloss style for an alert severity label
-// using the design's P1=critical / P2=warn / P3=muted convention.
-// Unknown values fall back to muted so we never stylelessly render.
+// SeverityStyle picks a Lipgloss style for an alert / risk / status
+// label using the design's P1=critical / P2=warn / P3=muted
+// convention, plus the agent's own labels (high/medium/low,
+// awaiting_approval, blocked, regressed, etc.). Unknown values fall
+// back to dim so we never stylelessly render.
 func SeverityStyle(sev string) lipgloss.Style {
 	switch sev {
-	case "P1", "p1", "critical", "Critical":
+	// Severity labels — pager-grade.
+	case "P1", "p1", "critical", "Critical", "high", "High":
 		return lipgloss.NewStyle().Foreground(StatusError).Bold(true)
-	case "P2", "p2", "warning", "Warning", "warn":
+	case "P2", "p2", "warning", "Warning", "warn", "medium", "Medium":
 		return lipgloss.NewStyle().Foreground(StatusWarn)
-	case "P3", "p3", "info", "Info":
-		return lipgloss.NewStyle().Foreground(Fg3)
-	case "pending", "awaiting_approval":
+	case "P3", "p3", "info", "Info", "low", "Low":
+		return lipgloss.NewStyle().Foreground(StatusInfo)
+
+	// Incident status — purple for the human-in-the-loop gate, red
+	// for regressions / failures, green for happy outcomes, amber
+	// for blocked (the agent gave up — operator's turn now).
+	case "pending", "awaiting_approval", "Awaiting":
 		return lipgloss.NewStyle().Foreground(StatusPending)
-	case "ok", "resolved", "applied":
+	case "ok", "resolved", "Resolved", "applied", "Applied":
 		return OK
+	case "regressed", "Regressed", "failed", "Failed":
+		return lipgloss.NewStyle().Foreground(StatusError)
+	case "blocked", "Blocked", "expired", "Expired":
+		return lipgloss.NewStyle().Foreground(StatusWarn)
+
 	default:
 		return Dim
 	}
@@ -132,7 +144,7 @@ func PhaseGlyph(label string, state PhaseState) string {
 	case PhaseDone:
 		return Dim.Render(label) + " " + OK.Render("✓")
 	case PhaseCurrent:
-		return Pulse.Render(label+" ◆")
+		return Pulse.Render(label + " ◆")
 	case PhasePending:
 		return Dim.Render(label) + " " + Dim.Render("·")
 	default:

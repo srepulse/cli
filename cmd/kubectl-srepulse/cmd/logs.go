@@ -20,7 +20,8 @@ var logsCmd = &cobra.Command{
 	Long: `Print the agent's thought-stream events for an incident — tool calls,
 hypotheses, evidence, and node transitions. Use -f to follow the
 stream live (Ctrl+C to stop).`,
-	RunE: runLogs,
+	ValidArgsFunction: completeIncidentIDs,
+	RunE:              runLogs,
 }
 
 func init() {

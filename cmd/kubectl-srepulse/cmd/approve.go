@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/srepulse/cli/internal/client"
+	"github.com/srepulse/cli/internal/render"
 )
 
 var (
@@ -15,10 +16,11 @@ var (
 )
 
 var approveCmd = &cobra.Command{
-	Use:   "approve <id>",
-	Short: "Approve a pending remediation",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runApprove,
+	Use:               "approve <id>",
+	Short:             "Approve a pending remediation",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeIncidentIDs,
+	RunE:              runApprove,
 }
 
 func init() {
@@ -47,6 +49,7 @@ func runApprove(c *cobra.Command, args []string) error {
 	if err := cli.ApproveIncident(ctx, id, flagApproveReason); err != nil {
 		return fmt.Errorf("approve %s: %w", id, err)
 	}
-	fmt.Fprintf(c.OutOrStdout(), "approved %s\n", id)
+	out := c.OutOrStdout()
+	fmt.Fprintf(out, "%s approved %s\n", render.OK(out, "✓"), render.Pulse(out, id))
 	return nil
 }
