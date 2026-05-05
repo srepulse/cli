@@ -1,0 +1,86 @@
+version: 2
+
+# Goreleaser config for kubectl-srepulse.
+#
+# Builds:
+#   - linux/amd64, linux/arm64
+#   - darwin/amd64, darwin/arm64
+#   - windows/amd64
+# Artefacts:
+#   - per-platform tarball/zip with the binary + LICENSE + README
+#   - SHA256 checksums file
+#   - source archive
+# Release:
+#   - GitHub Release with the artefacts attached
+#   - Krew manifest auto-updated in srepulse/krew-index (gated by env)
+
+project_name: kubectl-srepulse
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: kubectl-srepulse
+    main: ./cmd/kubectl-srepulse
+    binary: kubectl-srepulse
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - { goos: windows, goarch: arm64 } # release once we hear demand
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    formats: [tar.gz]
+    format_overrides:
+      - { goos: windows, formats: [zip] }
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# Krew plugin manifest. We render the manifest from the template at
+# deploy/krew/srepulse.yaml.tmpl and let goreleaser commit the result
+# to the srepulse/krew-index fork on each release. The push only
+# fires when KREW_GITHUB_TOKEN is set, so local snapshot builds are
+# side-effect-free.
+krews:
+  - name: srepulse
+    repository:
+      owner: srepulse
+      name: krew-index
+      branch: main
+      token: "{{ .Env.KREW_GITHUB_TOKEN }}"
+    homepage: "https://srepulse.com"
+    description: "Terminal client for srepulse — autonomous Kubernetes SRE."
+    short_description: "Talk to srepulse from kubectl."
+    skip_upload: auto

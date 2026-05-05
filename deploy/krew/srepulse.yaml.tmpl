@@ -1,0 +1,44 @@
+# Krew plugin manifest template (rendered by Goreleaser on release).
+# Source of truth for the actual manifest: this file. Goreleaser
+# substitutes platform-specific download URLs + checksums into the
+# {{ .Asset }} blocks based on the build matrix in .goreleaser.yaml.
+#
+# Submit a rendered manifest to https://github.com/kubernetes-sigs/krew-index
+# the first time we ship; subsequent versions auto-PR via Goreleaser.
+apiVersion: krew.googlecontainertools.github.com/v1alpha2
+kind: Plugin
+metadata:
+  name: srepulse
+spec:
+  version: "{{ .TagName }}"
+  homepage: https://srepulse.com
+  shortDescription: "Talk to srepulse from kubectl."
+  description: |
+    srepulse is an autonomous Kubernetes SRE agent. This plugin is
+    the operator's terminal-side companion — list incidents, inspect
+    detail, approve / reject pending remediations, stream the agent's
+    reasoning, and launch the interactive TUI.
+
+    Run `kubectl srepulse` for the TUI; the subcommands cover the
+    same flow for scripts and Slack-pasted commands.
+
+  caveats: |
+    The plugin reads from a srepulse instance running in your
+    cluster. Configure the URL once with:
+
+      kubectl srepulse config set-server https://srepulse.your-cluster.example
+
+    Then `kubectl srepulse login` to cache credentials.
+
+  platforms:
+{{- range .Builds }}
+{{- if and (or (eq .Goos "linux") (eq .Goos "darwin") (eq .Goos "windows")) (or (eq .Goarch "amd64") (eq .Goarch "arm64")) }}
+    - selector:
+        matchLabels:
+          os: {{ .Goos }}
+          arch: {{ .Goarch }}
+      uri: {{ .Url }}
+      sha256: "{{ .Sha256 }}"
+      bin: kubectl-srepulse{{ if eq .Goos "windows" }}.exe{{ end }}
+{{- end }}
+{{- end }}

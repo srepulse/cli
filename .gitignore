@@ -1,0 +1,27 @@
+# Build outputs
+/dist/
+/bin/
+/kubectl-srepulse
+/srepulse-cli
+*.tar.gz
+*.zip
+
+# Go
+/vendor/
+*.test
+*.out
+coverage.txt
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local config (in case anyone ever checks one in)
+.env
+.env.*
+
+# Goreleaser dist
+.goreleaser-cache/
