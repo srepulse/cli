@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/srepulse/cli/internal/client"
 	"github.com/srepulse/cli/internal/config"
 	"golang.org/x/term"
 )
@@ -40,17 +41,21 @@ func runLogin(c *cobra.Command, _ []string) error {
 		return fmt.Errorf("read password: %w", err)
 	}
 
-	// TODO: call /api/v1/auth/login when wired. For now, persist the
-	// raw values so the rest of the flow can be exercised against a
-	// dev backend; the loginer hits the real endpoint as soon as
-	// auth lands in the agent.
-	if err := config.Save(&config.File{
-		ServerURL: url,
-		AuthToken: string(pwd), // placeholder — swap for the returned JWT
-		Username:  user,
-	}); err != nil {
+	cli := client.New(url, flagInsecure)
+	res, err := cli.Login(c.Context(), user, string(pwd))
+	if err != nil {
+		return fmt.Errorf("login failed: %w", err)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	cfg.ServerURL = url
+	cfg.AuthToken = res.Token
+	cfg.Username = res.User.Email
+	if err := config.Save(cfg); err != nil {
 		return fmt.Errorf("save credentials: %w", err)
 	}
-	fmt.Fprintf(c.OutOrStdout(), "saved session for %s\n", user)
+	fmt.Fprintf(c.OutOrStdout(), "saved session for %s\n", res.User.Email)
 	return nil
 }

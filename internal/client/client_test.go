@@ -80,6 +80,71 @@ func TestListIncidents_HTTPError_BubblesUp(t *testing.T) {
 	}
 }
 
+func TestLogin_PostsCredentialsAndDecodesToken(t *testing.T) {
+	captured := &capture{}
+	srv := newFakeServer(t, 200,
+		`{"token":"jwt-abc","user":{"id":"u1","email":"alice@example.com","role":"operator"},"expiresIn":43200}`,
+		captured,
+	)
+	defer srv.Close()
+
+	got, err := New(srv.URL, false).Login(context.Background(), "alice@example.com", "secret123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Token != "jwt-abc" || got.User.Email != "alice@example.com" {
+		t.Fatalf("login response mismatch: %+v", got)
+	}
+	if captured.method != http.MethodPost || captured.path != "/api/v1/auth/login" {
+		t.Errorf("got %s %s", captured.method, captured.path)
+	}
+	var body map[string]string
+	if err := json.Unmarshal([]byte(captured.body), &body); err != nil {
+		t.Fatalf("body not JSON: %v (raw=%s)", err, captured.body)
+	}
+	if body["email"] != "alice@example.com" || body["password"] != "secret123" {
+		t.Errorf("credentials body mismatch: %v", body)
+	}
+}
+
+func TestLogin_DoesNotSendCachedBearer(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SREPULSE_CONFIG_DIR", dir)
+	if err := config.Save(&config.File{AuthToken: "stale-token"}); err != nil {
+		t.Fatal(err)
+	}
+
+	captured := &capture{}
+	srv := newFakeServer(t, 200,
+		`{"token":"jwt-abc","user":{"id":"u1","email":"alice@example.com","role":"operator"},"expiresIn":43200}`,
+		captured,
+	)
+	defer srv.Close()
+
+	if _, err := New(srv.URL, false).Login(context.Background(), "alice@example.com", "secret123"); err != nil {
+		t.Fatal(err)
+	}
+	if captured.auth != "" {
+		t.Errorf("login Authorization = %q, want empty", captured.auth)
+	}
+}
+
+func TestLogin_RequiresUserEmail(t *testing.T) {
+	srv := newFakeServer(t, 200,
+		`{"token":"jwt-abc","user":{"id":"u1","role":"operator"},"expiresIn":43200}`,
+		&capture{},
+	)
+	defer srv.Close()
+
+	_, err := New(srv.URL, false).Login(context.Background(), "alice@example.com", "secret123")
+	if err == nil {
+		t.Fatal("expected missing user email error")
+	}
+	if !strings.Contains(err.Error(), "missing user email") {
+		t.Fatalf("error = %v, want missing user email", err)
+	}
+}
+
 func TestApproveIncident_SendsReason(t *testing.T) {
 	captured := &capture{}
 	srv := newFakeServer(t, 200, "ok", captured)

@@ -66,6 +66,20 @@ type TraceStep struct {
 	Data    map[string]any `json:"data,omitempty"`
 }
 
+type AuthUser struct {
+	ID       string `json:"id"`
+	Email    string `json:"email"`
+	Name     string `json:"name,omitempty"`
+	Role     string `json:"role"`
+	Disabled bool   `json:"disabled"`
+}
+
+type LoginResponse struct {
+	Token     string   `json:"token"`
+	User      AuthUser `json:"user"`
+	ExpiresIn int64    `json:"expiresIn"`
+}
+
 // ── Fingerprints ─────────────────────────────────────────────────
 //
 // The catalog of recognisers the agent matches incidents against.
@@ -74,10 +88,10 @@ type TraceStep struct {
 // catalog UI.
 
 type Fingerprint struct {
-	ID          string   `json:"id"`         // stable kebab-case slug
-	Name        string   `json:"name"`       // engine-side identifier (PascalCase)
-	Category    string   `json:"category"`   // crash / image / scheduling / observability / learned / …
-	Source      string   `json:"source"`     // k8s / prometheus / alertmanager / scanner / argocd / pagerduty
+	ID          string   `json:"id"`       // stable kebab-case slug
+	Name        string   `json:"name"`     // engine-side identifier (PascalCase)
+	Category    string   `json:"category"` // crash / image / scheduling / observability / learned / …
+	Source      string   `json:"source"`   // k8s / prometheus / alertmanager / scanner / argocd / pagerduty
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
 	Fix         string   `json:"fix"`
