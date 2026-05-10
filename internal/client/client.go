@@ -57,6 +57,14 @@ func authHeader() string {
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body any) (*http.Response, error) {
+	return c.doWithAuth(ctx, method, path, body, true)
+}
+
+func (c *Client) doUnauthenticated(ctx context.Context, method, path string, body any) (*http.Response, error) {
+	return c.doWithAuth(ctx, method, path, body, false)
+}
+
+func (c *Client) doWithAuth(ctx context.Context, method, path string, body any, includeAuth bool) (*http.Response, error) {
 	var rdr io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -73,8 +81,10 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if h := authHeader(); h != "" {
-		req.Header.Set("Authorization", h)
+	if includeAuth {
+		if h := authHeader(); h != "" {
+			req.Header.Set("Authorization", h)
+		}
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -86,6 +96,28 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
 	}
 	return resp, nil
+}
+
+func (c *Client) Login(ctx context.Context, email, password string) (*LoginResponse, error) {
+	resp, err := c.doUnauthenticated(ctx, http.MethodPost, "/api/v1/auth/login", map[string]string{
+		"email":    email,
+		"password": password,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var out LoginResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode login response: %w", err)
+	}
+	if out.Token == "" {
+		return nil, errors.New("login response missing token")
+	}
+	if out.User.Email == "" {
+		return nil, errors.New("login response missing user email")
+	}
+	return &out, nil
 }
 
 // ListIncidents returns the incident catalog. Order is server-side
